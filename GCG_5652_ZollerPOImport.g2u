@@ -1,0 +1,650 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.F1..Create
+Gui.F1..Caption("Purchase Order Integartion with Zoller")
+Gui.F1..Size(7770,3405)
+Gui.F1..MinX(0)
+Gui.F1..MinY(0)
+Gui.F1..Position(0,0)
+Gui.F1..BackColor(-2147483633)
+Gui.F1..MousePointer(0)
+Gui.F1..Event(UnLoad,Unload)
+Gui.F1.txtCreate.Create(TextBox,"",True,6645,300,0,210,360,True,0,"Arial",8,-2147483643,1)
+Gui.F1.txtReceive.Create(TextBox,"",True,6645,300,0,210,1140,True,0,"Arial",8,-2147483643,1)
+Gui.F1.cmdCreate.Create(Button)
+Gui.F1.cmdCreate.Size(375,375)
+Gui.F1.cmdCreate.Position(7005,315)
+Gui.F1.cmdCreate.Caption("^")
+Gui.F1.cmdCreate.Event(Click,DirectoryBrow)
+Gui.F1.cmdReceive.Create(Button)
+Gui.F1.cmdReceive.Size(375,375)
+Gui.F1.cmdReceive.Position(7005,1095)
+Gui.F1.cmdReceive.Caption("^")
+Gui.F1.cmdReceive.Event(Click,DirectoryBrow)
+Gui.F1.lbl1.Create(Label,"New Purchase Order file directory:",True,5490,255,0,255,135,True,0,"Arial",8,-2147483633,0)
+Gui.F1.lbl2.Create(Label,"Purchase Order Receipt file directory:",True,4830,255,0,255,915,True,0,"Arial",8,-2147483633,0)
+Gui.F1.cmdSave.Create(Button)
+Gui.F1.cmdSave.Size(975,375)
+Gui.F1.cmdSave.Position(6480,2430)
+Gui.F1.cmdSave.Caption("SAVE")
+Gui.F1.cmdSave.Event(Click,SaveDirectories)
+Gui.F1.lbl3.Create(Label,"Purchase Order errors directory:",True,4830,255,0,255,1695,True,0,"Arial",8,-2147483633,0)
+Gui.F1.txtErrors.Create(TextBox,"",True,6645,300,0,210,1920,True,0,"Arial",8,-2147483643,1)
+Gui.F1.cmdErrors.Create(Button)
+Gui.F1.cmdErrors.Size(375,375)
+Gui.F1.cmdErrors.Position(7005,1875)
+Gui.F1.cmdErrors.Caption("^")
+Gui.F1.cmdErrors.Event(Click,DirectoryBrow)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.External.Include.Library("UPLPUROR.lib")
+Program.External.Include.Library("6016.lib")
+V.Global.sErrorLog.Declare(String, "")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'This project was created for Rugo Machine. It will be a small integration with Zoller. 
+'Their purchasing department use Zoller to make purchase orders and PO receipts, which we will then expect will create a file that this script will read to process into PO in GS.
+'We will be using either the Library UPLPUROR to create PO in Global Shop or the Callwrapper 175100 
+'Created by FEQ on 8/21/2019
+
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+'We begin by requesting an excel file:
+'F.Intrinsic.Control.CallSub(FileDialog)
+F.Intrinsic.Control.SelectCase(V.Caller.Switches)
+	F.Intrinsic.Control.Case("M")
+		F.Intrinsic.Control.CallSub(Maintenance)
+	F.Intrinsic.Control.CaseElse
+		F.Intrinsic.UI.InvokeWaitDialog("Verifying directories and gathering files.", "Purchase Order Integration")
+		F.Intrinsic.Control.Callsub(FileDialog)
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.Unload.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sExt.Declare(String, "")
+V.Local.sFile.Declare(String, "")
+
+F.Intrinsic.Control.If(V.DataTable.dtDirs.Exists, =, True)
+	'We are going to save the error log if we have anything in there.
+	F.Intrinsic.Control.If(V.Global.sErrorLog.Trim, <>, "")
+		F.Intrinsic.String.Format(V.Ambient.Now, "YYMMDD", V.Local.sExt)
+		F.Intrinsic.String.Build("{0}\{1}POERRORS{2}", V.DataTable.dtDirs(2).DIR_FILE!FieldValTrim, V.Caller.CompanyCode, V.Local.sExt, V.Local.sFile)
+		F.Intrinsic.File.String2File(V.Local.sFile, V.Global.sErrorLog)
+	F.Intrinsic.Control.EndIf
+
+	F.Data.DataTable.Close("dtDirs")
+	
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.UI.CloseWaitDialog
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Unload.End
+
+Program.Sub.FileDialog.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sFiles.Declare(String, "")
+V.Local.sFilNm.Declare(String, "")
+V.Local.sExt.Declare(String, "")
+V.Local.sSwtch.Declare(String, "")
+V.Local.sCheck.Declare(String, "")
+V.Local.iDrcla.Declare(Long, 0)
+V.Local.iNsfr2.Declare(Long, 0)
+V.Local.iEllie.Declare(Long, 0)
+V.Local.bFilCk.Declare(Boolean, False)
+
+V.Local.sSwtch.Set(V.Caller.Switches.Trim)
+'V.Local.sSwtch.Set("R")
+
+''Open File Browser and Save File as variable sFile
+'F.Intrinsic.UI.ShowOpenFileDialog("","*.csv","C:\",V.Local.sFile)
+
+'F.Intrinsic.Control.If(V.Local.sFile.IsNotCancel, =, True)
+'	'We need to check and make sure that the file they selected is a csv file.
+'	F.Intrinsic.String.Split(V.Local.sFile, ".", V.Local.sExt)
+'	F.Intrinsic.Control.If(V.Local.sExt(V.Local.sExt.UBound).UCase, <>, "CSV")
+'		F.Intrinsic.UI.Msgbox("Please select a CSV file", "FILE ERROR")
+'		F.Intrinsic.Control.CallSub(Unload)
+'	F.Intrinsic.Control.EndIf
+'	
+'	'We 
+'	F.Intrinsic.Control.SelectCase(V.Local.sSwtch)
+'		F.Intrinsic.Control.Case("C")
+'			'The flag C is for Create PO in Global Shop
+'			F.Intrinsic.Control.CallSub(ContentDataTable, "File", V.Local.sFile)
+'			
+'		F.Intrinsic.Control.Case("R")
+'			'The flag R is for Receipt.
+'			F.Intrinsic.Control.CallSub(POReceipts, "File", V.Local.sFile)
+'			
+'	F.Intrinsic.Control.EndSelect
+'	
+'F.Intrinsic.Control.EndIf
+
+'We are changing the way the process works. The customer wants to select directories for both processes and run it automatically.
+F.ODBC.Connection!conx.OpenCompanyConnection
+
+F.Data.DataTable.CreateFromSQL("dtDirs", "conx", "Select DIR_ID, DIR_TYPE, DIR_FILE from GCG_5652_ZOLLER_DIR where DIR_ID in ('1', '2', '3') order by DIR_ID ASC", True)
+
+F.Intrinsic.Control.For(V.Local.iDrcla, 0, V.DataTable.dtDirs.RowCount--, 1)
+	F.Intrinsic.Control.SelectCase(V.DataTable.dtDirs(V.Local.iDrcla).DIR_ID!FieldValLong)
+		F.Intrinsic.Control.Case(1)
+			'We want to grab all the files from that directory and verify that they are .csv files. If so, send them over to have orders created
+			F.Intrinsic.File.DirExists(V.DataTable.dtDirs(V.Local.iDrcla).DIR_FILE!FieldValTrim, V.Local.bFilCk)
+			F.Intrinsic.Control.If(V.Local.bFilCk, =, True)
+				F.Intrinsic.File.GetFileList(V.DataTable.dtDirs(V.Local.iDrcla).DIR_FILE!FieldValTrim, V.Local.sFiles)
+				F.Intrinsic.String.Split(V.Local.sFiles, ":", V.Local.sFiles)
+				F.Intrinsic.Math.Add(V.Local.sFiles.UBound, 1, V.Local.iEllie)
+				F.Intrinsic.String.Build("Processing Purchase Orders. {0} files found.", V.Local.iEllie, V.Local.sCheck)
+				F.Intrinsic.UI.ChangeWaitStatus(V.Local.sCheck)
+				F.Intrinsic.Control.For(V.Local.iNsfr2, 0, V.Local.sFiles.UBound, 1)
+					
+					F.Intrinsic.String.Split(V.Local.sFiles(V.Local.iNsfr2), ".", V.Local.sExt)
+					F.Intrinsic.Control.If(V.Local.sExt(V.Local.sExt.UBound).UCase, =, "CSV")
+						F.Intrinsic.String.Build("{0}{1}", V.DataTable.dtDirs(V.Local.iDrcla).DIR_FILE!FieldValTrim, V.Local.sFiles(V.Local.iNsfr2).Trim, V.Local.sFilNm)
+						F.Intrinsic.Control.CallSub(POEntry, "File", V.Local.sFilNm)
+						
+					F.Intrinsic.Control.Else
+						'The file is not a CSV
+						F.Intrinsic.String.Build("{0}Error in file '{1}'. File in Purchase Order directory was not a .csv file.{2}", V.Global.sErrorLog, V.Local.sFiles(V.Local.iNsfr2), V.Ambient.NewLine, V.Global.sErrorLog)
+					F.Intrinsic.Control.EndIf
+				
+				F.Intrinsic.Control.Next(V.Local.iNsfr2)
+				
+			F.Intrinsic.Control.Else
+				F.Intrinsic.String.Build("{0}Directory error: The directory '{1}' for Purchase Orders was not found. {2}{2}", V.Global.sErrorLog, V.DataTable.dtDirs(V.Local.iDrcla).DIR_FILE!FieldValTrim, V.Ambient.NewLine, V.Global.sErrorLog)
+			F.Intrinsic.Control.EndIf
+			
+		F.Intrinsic.Control.Case(2)
+		
+			'We want to grab all the files from that directory and verify that they are .csv files. If so, receive those POs
+			F.Intrinsic.File.DirExists(V.DataTable.dtDirs(V.Local.iDrcla).DIR_FILE!FieldValTrim, V.Local.bFilCk)
+			F.Intrinsic.Control.If(V.Local.bFilCk, =, True)
+				F.Intrinsic.File.GetFileList(V.DataTable.dtDirs(V.Local.iDrcla).DIR_FILE!FieldValTrim, V.Local.sFiles)
+				F.Intrinsic.String.Split(V.Local.sFiles, ":", V.Local.sFiles)
+				F.Intrinsic.Math.Add(V.Local.sFiles.UBound, 1, V.Local.iEllie)
+				F.Intrinsic.String.Build("Processing Purchase Order Receipts. {0} files found.", V.Local.iEllie, V.Local.sCheck)
+				F.Intrinsic.UI.ChangeWaitStatus(V.Local.sCheck)
+				F.Intrinsic.Control.For(V.Local.iNsfr2, 0, V.Local.sFiles.UBound, 1)
+					
+					F.Intrinsic.String.Split(V.Local.sFiles(V.Local.iNsfr2), ".", V.Local.sExt)
+					F.Intrinsic.Control.If(V.Local.sExt(V.Local.sExt.UBound).UCase, =, "CSV")
+						F.Intrinsic.String.Build("{0}{1}", V.DataTable.dtDirs(V.Local.iDrcla).DIR_FILE!FieldValTrim, V.Local.sFiles(V.Local.iNsfr2).Trim, V.Local.sFilNm)
+						F.Intrinsic.Control.CallSub(POReceipts, "File", V.Local.sFilNm)
+						
+					F.Intrinsic.Control.Else
+						'The file is not a CSV
+						F.Intrinsic.String.Build("{0}Error in file '{1}'. File in Purchase Order Receipts directory was not a .csv file.{2}", V.Global.sErrorLog, V.Local.sFiles(V.Local.iNsfr2), V.Ambient.NewLine, V.Global.sErrorLog)
+					F.Intrinsic.Control.EndIf
+				
+				F.Intrinsic.Control.Next(V.Local.iNsfr2)
+				
+			F.Intrinsic.Control.Else
+				F.Intrinsic.String.Build("{0}Directory error: The directory '{1}' for Purchase Orders Receipts was not found. {2}{2}", V.Global.sErrorLog, V.DataTable.dtDirs(V.Local.iDrcla).DIR_FILE!FieldValTrim, V.Ambient.NewLine, V.Global.sErrorLog)
+			F.Intrinsic.Control.EndIf
+			
+		F.Intrinsic.Control.Case(3)
+			F.Intrinsic.UI.ChangeWaitStatus("Checking for errors")
+			'We are going to save the error log if we have anything in there.
+			F.Intrinsic.Control.If(V.Global.sErrorLog.Trim, <>, "")				
+				F.Intrinsic.String.Format(V.Ambient.Now, "YYMMDD", V.Local.sExt)
+				F.Intrinsic.String.Build("{0}\{1}POERRORS{2}", V.DataTable.dtDirs(V.Local.iDrcla).DIR_FILE!FieldValTrim, V.Caller.CompanyCode, V.Local.sExt, V.Local.sFiles)
+				F.Intrinsic.File.String2File(V.Local.sFiles, V.Global.sErrorLog)
+			F.Intrinsic.Control.EndIf
+			
+	F.Intrinsic.Control.EndSelect
+F.Intrinsic.Control.Next(V.Local.iDrcla)
+
+F.Data.DataTable.Close("dtDirs")
+
+F.ODBC.Connection!conx.Close
+
+F.Intrinsic.UI.CloseWaitDialog
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.FileDialog.End
+
+Program.Sub.ContentDataTable.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sContent.Declare(String, "")
+V.Local.sTitles.Declare(String, "")
+V.Local.sTypes.Declare(String, "")
+V.Local.sLines.Declare(String, "")
+V.Local.sCheck.Declare(String, "")
+V.Local.sPONum.Declare(String, "")
+V.Local.sQuery.Declare(String, "")
+V.Local.iNum.Declare(Long, 0)
+
+'This subroutine is no longer used
+
+'The column names and datatypes listed below:
+V.Local.sTitles.Set("Date_time*!*ProcedureType*!*ArticleDesignation*!*Quantity*!*Costs*!*Currency*!*Order_no*!*Supplier_no*!*SupplierName*!*Supplier_Article_No*!*Comment")
+V.Local.sTypes.Set("String*!*String*!*String*!*Float*!*Float*!*String*!*String*!*String*!*String*!*String*!*String")
+
+'For some reason, even though the files are labeled as csv files, the file we are reading is delimeted by a semicolon
+F.Intrinsic.File.File2String(V.Args.File, V.Local.sContent)
+F.Intrinsic.String.Split(V.Local.sContent, V.Ambient.NewLine, V.Local.sLines)
+F.Intrinsic.String.Split(V.Local.sLines(0), ",", V.Local.sCheck)
+
+F.Intrinsic.Control.If(V.Local.sCheck.UBound, =, 10)
+	'We have a proper csv file
+	F.Intrinsic.Variable.PopArray(V.Local.sLines, V.Local.sLines)
+	F.Intrinsic.Variable.PopArray(V.Local.sLines, V.Local.sLines)
+	F.Data.DataTable.CreateFromString("dtFile", V.Local.sContent, V.Local.sTitles, V.Local.sTypes, ",", V.Ambient.NewLine, True)
+F.Intrinsic.Control.Else
+	'We expect to have a semicolon delimited file
+	F.Intrinsic.Variable.PopArray(V.Local.sLines, V.Local.sLines)
+	F.Intrinsic.Variable.PopArray(V.Local.sLines, V.Local.sLines)
+	F.Intrinsic.Control.If(V.Local.sLines(V.Local.sLines.UBound).Trim, =, "")
+		F.Intrinsic.Math.Sub(V.Local.sLines.UBound, 1, V.Local.iNum)
+		V.Local.sLines.RedimPreserve(0,V.Local.iNum)
+		'F.Intrinsic.Variable.PushArray(V.Local.sLines, V.Local.sLines)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.Join(V.Local.sLines, "@!@", V.Local.sContent)
+	F.Intrinsic.String.Build("{0};{0}", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, ";", V.Local.sContent)
+	F.Intrinsic.String.Build(";{0}", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, ";", V.Local.sContent)
+	F.Data.DataTable.CreateFromString("dtFile", V.Local.sContent, V.Local.sTitles, V.Local.sTypes, ";", "@!@", True)
+F.Intrinsic.Control.EndIf
+
+'All data is now in the dtFile 
+F.Intrinsic.Control.If(V.DataTable.dtFile.RowCount, >, 0)
+	F.Intrinsic.Control.CallSub(FillOrdTables)
+	
+	F.Intrinsic.Control.CallSub(UPLPURORSync)
+	F.Intrinsic.String.LPad(V.DataTable.dtFile(0).Order_No!FieldVal, "0", 7, V.Local.sPONum)
+	
+	F.Intrinsic.String.Build("Select PURCHASE_ORDER from V_PO_HEADER where PURCHASE_ORDER = '{0}'", V.Local.sPONum, V.Local.sQuery)
+	F.ODBC.Connection!conx.ExecuteAndReturn(V.Local.sQuery, V.Local.sCheck)
+	F.Intrinsic.Control.If(V.Local.sCheck.Trim, <>, "")
+		'The order was built successfully, we delete the file
+		F.Intrinsic.File.DeleteFile(V.Args.File)
+	F.Intrinsic.Control.Else
+		'Add file to the list of errors
+		F.Intrinsic.String.Build("{0}PO Creation Error. Order Number {1} does not appear to be created in the system.{2}", V.Global.sErrorLog, V.Local.sPONum, V.Ambient.NewLine, V.Global.sErrorLog)
+		F.Intrinsic.String.Build("{0}Attempted to be created from file: {1}.{2}{2}", V.Global.sErrorLog, V.Args.File, V.Ambient.NewLine, V.Global.sErrorLog)
+		
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.EndIf
+F.Data.DataTable.Close("dtFile")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.ContentDataTable.End
+
+Program.Sub.FillOrdTables.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sPONo.Declare(String, "")
+V.Local.sDateOrd.Declare(String, "")
+V.Local.sDateForm.Declare(String, "")
+V.Local.sLine.Declare(String, "")
+V.Local.sInvPart.Declare(String, "")
+V.Local.sPurchQty.Declare(String, "")
+V.Local.sPurchCost.Declare(String, "")
+V.Local.sCurr.Declare(String, "")
+V.Local.iDrac.Declare(Long, 0)
+V.Local.iNum.Declare(Long, 0)
+
+'The order number will be in column Order_No, but not padded
+F.Intrinsic.String.LPad(V.DataTable.dtFile(0).Order_No!FieldVal, "0", 7, V.Local.sPONo)
+F.Intrinsic.String.Split(V.DataTable.dtFile(0).Date_time!FieldVal, " ", V.Local.sDateOrd)
+F.Intrinsic.String.Replace(V.Local.sDateOrd(0), V.Ambient.DblQuote, "", V.Local.sDateOrd)
+F.Intrinsic.String.Split(V.Local.sDateOrd(0), "/", V.Local.sDateOrd)
+V.Local.sDateOrd.RedimPreserve(0, 2)
+F.Intrinsic.String.LPad(V.Local.sDateOrd(0), "0", 2, V.Local.sDateOrd(0))
+F.Intrinsic.String.Right(V.Local.sDateOrd(2), 2, V.Local.sDateOrd(2))
+F.Intrinsic.String.Build("{0}{1}{2}", V.Local.sDateOrd(0), V.Local.sDateOrd(1), V.Local.sDateOrd(2), V.Local.sDateForm)
+F.Data.DataTable.AddRow("UPLPURORA", "PONum", V.Local.sPONo, "RecType", "A", "POOrderDate", V.Local.sDateForm, "VendNum", V.DataTable.dtFile(0).Supplier_no!FieldValTrim)
+
+F.Data.DataTable.AddRow("UPLPURORBC", "PONum", V.Local.sPONo, "RecType", "B", "VendName", V.DataTable.dtFile(0).SupplierName!FieldValTrim)
+
+F.Intrinsic.Control.For(V.Local.iDrac, 0, V.DataTable.dtFile.RowCount--, 1)
+	'loop through and fill in the lines table
+	F.Intrinsic.Math.Add(V.Local.iDrac, 1, V.Local.iNum)
+	F.Intrinsic.String.LPad(V.Local.iNum, "0", 3, V.Local.sLine)
+	F.Intrinsic.String.Replace(V.DataTable.dtFile(V.Local.iDrac).ArticleDesignation!FieldValTrim, V.Ambient.DblQuote, "", V.Local.sInvPart)
+	F.Intrinsic.String.RPad(V.Local.sInvPart, " ", 20, V.Local.sInvPart)
+	F.Intrinsic.String.Left(V.Local.sInvPart, 20, V.Local.sInvPart)
+	'Purchase cost needs to be formatted 10.6 (supposed to be sixteen characters, but if we include the period it will be 17..?) we may need to strip the period
+	F.Intrinsic.String.Format(V.DataTable.dtFile(V.Local.iDrac).Costs!FieldValFloat, "#########.000000", V.Local.sPurchCost)
+	F.Intrinsic.String.LPad(V.Local.sPurchCost, "0", 16, V.Local.sPurchCost)
+	F.Intrinsic.String.Format(V.DataTable.dtFile(V.Local.iDrac).Quantity!FieldValFloat, "#########.000000", V.Local.sPurchQty)
+	F.Intrinsic.String.LPad(V.Local.sPurchQty, "0", 16, V.Local.sPurchQty)
+	F.Intrinsic.String.LPad(V.DataTable.dtFile(V.Local.iDrac).Currency!FieldValTrim, " ", 3, V.Local.sCurr)
+	F.Intrinsic.String.Right(V.Local.sCurr, 3, V.Local.sCurr)
+	F.Data.DataTable.AddRow("UPLPURORL", "PONum", V.Local.sPONo, "RecType", V.Local.sLine, "PartNum", V.Local.sInvPart, "POUM", "EA", "PurchCost", V.Local.sPurchCost, "PurchQtyOrdered", V.Local.sPurchQty, "ExchCurr", V.Local.sCurr)
+F.Intrinsic.Control.Next(V.Local.iDrac)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.FillOrdTables.End
+
+Program.Sub.POReceipts.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sContent.Declare(String, "")
+V.Local.sTitles.Declare(String, "")
+V.Local.sTypes.Declare(String, "")
+V.Local.sLines.Declare(String, "")
+V.Local.sCheck.Declare(String, "")
+V.Local.sPONum.Declare(String, "")
+V.Local.sQuery.Declare(String, "")
+V.Local.iNum.Declare(Long, 0)
+
+'The column names and datatypes listed below:
+V.Local.sTitles.Set("Date_time*!*ProcedureType*!*Part*!*OrderQty*!*Price*!*Currency*!*OrderNo*!*VendorNo*!*VendorName*!*Supplier_Article_No*!*Comment")
+V.Local.sTypes.Set("String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String")
+
+'For some reason, even though the files are labeled as csv files, the file we are reading is delimeted by a semicolon
+F.Intrinsic.File.File2String(V.Args.File, V.Local.sContent)
+F.Intrinsic.String.Split(V.Local.sContent, V.Ambient.NewLine, V.Local.sLines)
+F.Intrinsic.String.Split(V.Local.sLines(0), ",", V.Local.sCheck)
+F.Intrinsic.Control.If(V.Local.sCheck.UBound, =, 10)
+
+F.Intrinsic.Control.Else
+	F.Intrinsic.Variable.PopArray(V.Local.sLines, V.Local.sLines)
+	F.Intrinsic.Variable.PopArray(V.Local.sLines, V.Local.sLines)
+	F.Intrinsic.Control.If(V.Local.sLines(V.Local.sLines.UBound).Trim, =, "")
+		F.Intrinsic.Math.Sub(V.Local.sLines.UBound, 1, V.Local.iNum)
+		V.Local.sLines.RedimPreserve(0,V.Local.iNum)
+		'F.Intrinsic.Variable.PushArray(V.Local.sLines, V.Local.sLines)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.Join(V.Local.sLines, "@!@", V.Local.sContent)
+	F.Intrinsic.String.Build("{0}{0}@!@", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, "@!@", V.Local.sContent)
+	F.Intrinsic.String.Build("{0}@!@", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, "@!@", V.Local.sContent)
+	F.Intrinsic.String.Build("{0}{0};{0}{0}", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, ";", V.Local.sContent)
+	F.Intrinsic.String.Build("{0};{0}", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, ";", V.Local.sContent)
+	F.Data.DataTable.CreateFromString("dtFile", V.Local.sContent, V.Local.sTitles, V.Local.sTypes, ";", "@!@", True)
+	
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.If(V.DataTable.dtFile.RowCount, >, 0)
+	F.Intrinsic.Control.CallSub(FillReceiptTable)
+	F.Intrinsic.Control.CallSub(6016Sync)
+	
+	F.Intrinsic.File.DeleteFile(V.Args.File)
+
+F.Intrinsic.Control.EndIf
+
+F.Data.DataTable.Close("dtFile")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.POReceipts.End
+
+Program.Sub.FillReceiptTable.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sPurch.Declare(String, "")
+V.Local.sQuery.Declare(String, "")
+V.Local.sFiltr.Declare(String, "")
+V.Local.sPOLin.Declare(String, "")
+V.Local.sPrtNo.Declare(String, "")
+V.Local.sRecDt.Declare(String, "")
+V.Local.sQuant.Declare(String, "")
+V.Local.sLines.Declare(String, "")
+V.Local.dRecDt.Declare(Date, "01/01/1900")
+V.Local.iCount.Declare(Long, 0)
+
+'BIG NOTE. This only works under the assumption that each file for PO receipts is focused on a single PO. If not, we would have to move the table create query into the loop and create the table for every line in the file
+'The purchase order receipt script requires the line of the purchase order, thus we are going to create a datatable to find the lines
+F.Intrinsic.String.LPad(V.DataTable.dtFile(0).OrderNo!FieldValTrim, "0", 7, V.Local.sPurch)
+F.Intrinsic.String.Build("Select PURCHASE_ORDER, RECORD_NO, LEFT(RECORD_NO, 3) as LINE, PART, QTY_ORDER, QTY_RECEIVED from V_PO_LINES where PURCHASE_ORDER = '{0}'", V.Local.sPurch, V.Local.sQuery)
+F.Data.DataTable.CreateFromSQL("dtPOLines", "conx", V.Local.sQuery, True)
+F.Data.DataTable.AddColumn("dtPOLines", "Received", "Float", 0)
+F.Data.DataTable.AddExpressionColumn("dtPOLines", "Needed", "Float", "[QTY_ORDER] - [QTY_RECEIVED]")
+F.Data.DataTable.AddExpressionColumn("dtPOLines", "LeftOver", "Float", "[Needed] - [Received]")
+
+'We are grabbing the information from the table and filling in the table for the library
+F.Intrinsic.Control.For(V.Local.iCount, 0, V.DataTable.dtFile.RowCount--, 1)
+	'We gotta trim the part to get a recognizable thing
+	F.Intrinsic.String.RPad(V.DataTable.dtFile(V.Local.iCount).PART!FieldValTrim, " ", 20, V.Local.sPrtNo)
+	F.Intrinsic.String.Left(V.Local.sPrtNo, 20, V.Local.sPrtNo)
+	F.Intrinsic.String.LPad(V.DataTable.dtFile(V.Local.iCount).OrderNo!FieldValTrim, "0", 7, V.Local.sPurch)
+	F.Intrinsic.String.Build("[Needed] > 0 AND [Leftover] > 0 AND [PART] = '{0}'", V.Local.sPrtNo, V.Local.sFiltr)
+	F.Data.DataView.Create("dtPOLines", "dvForReceipt", 22, V.Local.sFiltr, "RECORD_NO asc")
+	F.Intrinsic.Control.If(V.DataView.dtPOLines!dvForReceipt.RowCount, >, 0)
+		V.Local.sPOLin.Set(V.DataView.dtPOLines!dvForReceipt(0).LINE!FieldValTrim)
+		'Format the date received
+		F.Intrinsic.String.Replace(V.DataTable.dtFile(V.Local.iCount).Date_Time!FieldValTrim, V.Ambient.DblQuote, "", V.Local.dRecDt)
+		F.Intrinsic.String.Format(V.Local.dRecDt, "YYMMDD", V.Local.sRecDt)
+		'Format the quantity
+		F.Intrinsic.String.Format(V.DataTable.dtFile(V.Local.iCount).OrderQty!FieldValFloat, "#########.0000", V.Local.sQuant)
+		F.Intrinsic.String.LPad(V.Local.sQuant, "0", 16, V.Local.sQuant)
+		F.Data.DataTable.AddRow("6016", "PO", V.Local.sPurch, "Line", V.Local.sPOLin, "RcvdDate", V.Local.sRecDt, "Qty", V.Local.sQuant)
+		
+	F.Intrinsic.Control.EndIf
+	
+	F.Data.DataView.Close("dtPOLines", "dvForReceipt")
+	
+F.Intrinsic.Control.Next(V.Local.iCount)
+
+F.Data.DataTable.Close("dtPOLines")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.FillReceiptTable.End
+
+Program.Sub.Maintenance.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+
+F.ODBC.Connection!conx.OpenCompanyConnection
+
+'Setting up the screen and displaying it
+F.Data.DataTable.CreateFromSQL("dtDirs", "conx", "Select DIR_ID, DIR_TYPE, DIR_FILE from GCG_5652_ZOLLER_DIR order by DIR_ID ASC", True)
+F.Intrinsic.Control.If(V.DataTable.dtDirs.RowCount, =, 0)
+	F.Data.DataTable.AddRow("dtDirs", "DIR_ID", 1, "DIR_TYPE", "CREATE_PO", "DIR_FILE", "")
+	F.Data.DataTable.AddRow("dtDirs", "DIR_ID", 2, "DIR_TYPE", "PO_RECEIPT", "DIR_FILE", "")
+	F.Data.DataTable.AddRow("dtDirs", "DIR_ID", 3, "DIR_TYPE", "PO_ERRORS", "DIR_FILE", "")
+F.Intrinsic.Control.EndIf
+
+Gui.F1.txtCreate.Text(V.DataTable.dtDirs(0).Dir_File!FieldValTrim)
+Gui.F1.txtReceive.Text(V.DataTable.dtDirs(1).Dir_File!FieldValTrim)
+Gui.F1.txtErrors.Text(V.DataTable.dtDirs(2).Dir_File!FieldValTrim)
+
+Gui.F1..Show
+
+F.ODBC.Connection!conx.Close
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.Maintenance.End
+
+Program.Sub.DirectoryBrow.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sDirct.Declare(String, "")
+
+F.Intrinsic.UI.FolderBrowser("Select Directory", V.Local.sDirct)
+
+F.Intrinsic.Control.If(V.Local.sDirct, =, "***CANCEL***")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Else
+	
+	'We need to append the path with a '\' if it doesnt have one already
+	F.Intrinsic.Control.If(V.Local.sDirct.Right1, !=, "\", AND, V.Local.sDirct.Lenght, >, 0)
+	    V.Local.sDirct.Append("\")
+	F.Intrinsic.Control.EndIf
+		
+	F.Intrinsic.Control.SelectCase(V.Args.ControlName.UCase)
+		F.Intrinsic.Control.Case("CMDCREATE")
+			Gui.F1.txtCreate.Text(V.Local.sDirct.Trim)
+			
+		F.Intrinsic.Control.Case("CMDRECEIVE")
+			Gui.F1.txtReceive.Text(V.Local.sDirct.Trim)
+			
+		F.Intrinsic.Control.Case("CMDERRORS")
+			Gui.F1.txtErrors.Text(V.Local.sDirct.Trim)
+			
+	F.Intrinsic.Control.EndSelect
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.DirectoryBrow.End
+
+Program.Sub.SaveDirectories.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.bDirCk.Declare(Boolean, False)
+
+'We want to validate the directories and save the data if directories exist
+F.Intrinsic.File.DirExists(V.Screen.F1!txtCreate.Text, V.Local.bDirCK)
+F.Intrinsic.Control.If(V.Local.bDirCk, =, False)
+	F.Intrinsic.UI.Msgbox("Please select a valid directory for the Purchase Order creation files.", "INVALID PATH")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Else
+	F.Data.DataTable.SetValue("dtDirs", 0, "DIR_FILE", V.Screen.F1!txtCreate.Text)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.File.DirExists(V.Screen.F1!txtReceive.Text, V.Local.bDirCK)
+F.Intrinsic.Control.If(V.Local.bDirCk, =, False)
+	F.Intrinsic.UI.Msgbox("Please select a valid directory for the Purchase Order receipt files.", "INVALID PATH")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Else
+	F.Data.DataTable.SetValue("dtDirs", 1, "DIR_FILE", V.Screen.F1!txtReceive.Text)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.File.DirExists(V.Screen.F1!txtErrors.Text, V.Local.bDirCK)
+F.Intrinsic.Control.If(V.Local.bDirCk, =, False)
+	F.Intrinsic.UI.Msgbox("Please select a valid directory for the Purchase Order Error files.", "INVALID PATH")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Else
+	F.Data.DataTable.SetValue("dtDirs", 2, "DIR_FILE", V.Screen.F1!txtErrors.Text)
+F.Intrinsic.Control.EndIf
+
+F.ODBC.Connection!conx.OpenCompanyConnection
+
+F.Data.DataTable.SaveToDB("dtDirs", "conx", "GCG_5652_ZOLLER_DIR", "DIR_ID", 256)
+
+F.ODBC.Connection!conx.Close
+
+F.Intrinsic.Control.CallSub(Unload)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.SaveDirectories.End
+
+Program.Sub.POEntry.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String, "")
+V.Local.sContent.Declare(String, "")
+V.Local.sTitles.Declare(String, "")
+V.Local.sTypes.Declare(String, "")
+V.Local.sLines.Declare(String, "")
+V.Local.sCheck.Declare(String, "")
+V.Local.sPONum.Declare(String, "")
+V.Local.sQuery.Declare(String, "")
+V.Local.iNum.Declare(Long, 0)
+
+V.Local.sTitles.Set("ArticleDesignation*!*Order_No*!*Supplier_no*!*SupplierName*!*PartDesc*!*VendorOrder*!*VendorText*!*Quantity*!*Costs*!*Currency*!*Date_time*!*DeliveryDate")
+V.Local.sTypes.Set("String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String")
+'For some reason, even though the files are labeled as csv files, the file we are reading is delimeted by a semicolon
+F.Intrinsic.File.File2String(V.Args.File, V.Local.sContent)
+F.Intrinsic.String.Split(V.Local.sContent, V.Ambient.NewLine, V.Local.sLines)
+F.Intrinsic.String.Split(V.Local.sLines(0), ",", V.Local.sCheck)
+F.Intrinsic.Control.If(V.Local.sCheck.UBound, =, 11)
+	'real CSV . WARNING lol 
+F.Intrinsic.Control.Else
+	F.Intrinsic.Variable.PopArray(V.Local.sLines, V.Local.sLines)
+	F.Intrinsic.Control.If(V.Local.sLines(V.Local.sLines.UBound).Trim, =, "")
+		F.Intrinsic.Math.Sub(V.Local.sLines.UBound, 1, V.Local.iNum)
+		V.Local.sLines.RedimPreserve(0,V.Local.iNum)
+		'F.Intrinsic.Variable.PushArray(V.Local.sLines, V.Local.sLines)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.Join(V.Local.sLines, "@!@", V.Local.sContent)
+	F.Intrinsic.String.Build("{0}{0}@!@", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, "@!@", V.Local.sContent)
+	F.Intrinsic.String.Build("{0}@!@", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, "@!@", V.Local.sContent)
+	F.Intrinsic.String.Build("{0}{0};{0}{0}", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, ";", V.Local.sContent)
+	F.Intrinsic.String.Build("{0};{0}", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, ";", V.Local.sContent)
+	F.Intrinsic.String.Build("{0}{0}", V.Ambient.DblQuote, V.Local.sCheck)
+	F.Intrinsic.String.Replace(V.Local.sContent, V.Local.sCheck, "", V.Local.sContent)
+	F.Data.DataTable.CreateFromString("dtFile", V.Local.sContent, V.Local.sTitles, V.Local.sTypes, ";", "@!@", True)
+	
+F.Intrinsic.Control.EndIf
+
+'All data is now in the dtFile 
+F.Intrinsic.Control.If(V.DataTable.dtFile.RowCount, >, 0)
+	F.Intrinsic.Control.CallSub(FillOrdTables)	
+	F.Intrinsic.Control.CallSub(UPLPURORSync)
+	F.Intrinsic.String.LPad(V.DataTable.dtFile(0).Order_No!FieldVal, "0", 7, V.Local.sPONum)
+	
+	F.Intrinsic.String.Build("Select PURCHASE_ORDER from V_PO_HEADER where PURCHASE_ORDER = '{0}'", V.Local.sPONum, V.Local.sQuery)
+	F.ODBC.Connection!conx.ExecuteAndReturn(V.Local.sQuery, V.Local.sCheck)
+	F.Intrinsic.Control.If(V.Local.sCheck.Trim, <>, "")
+		'The order was built successfully, we delete the file
+		F.Intrinsic.File.DeleteFile(V.Args.File)
+	F.Intrinsic.Control.Else
+		'Add file to the list of errors
+		F.Intrinsic.String.Build("{0}PO Creation Error. Order Number {1} does not appear to be created in the system.{2}", V.Global.sErrorLog, V.Local.sPONum, V.Ambient.NewLine, V.Global.sErrorLog)
+		F.Intrinsic.String.Build("{0}Attempted to be created from file: {1}.{2}{2}", V.Global.sErrorLog, V.Args.File, V.Ambient.NewLine, V.Global.sErrorLog)
+		
+	F.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.EndIf
+F.Data.DataTable.Close("dtFile")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.POEntry.End
+
+Program.Sub.Comments.Start
+${$5$}$2.0.0.0$}$2
+${$6$}$triley$}$20231205084920614$}$iK6nerqp9nur1h1iSBfRKBBz1ENCgYv6K3yIG8Qsy8dMGnJRRejjCHkt3tBT5nGDYnYPQvF10Ew=
+Program.Sub.Comments.End
